@@ -901,7 +901,7 @@ Mode selection, as well as auxiliary control signals (such as step length in deb
     <h2>Software & Testing Flow</h2>
      <p class="instruction-text"> 
 The software development and testing workflow begins with writing programs in C, which serve as test cases for validating the functionality of our SoC. To support this, we built a complete RISC-V toolchain, including a customized linker script and memory configuration. Since our design follows a Harvard architecture with separate instruction memory (IMEM) and data memory (DMEM), the toolchain is configured to correctly place code sections into IMEM and data sections into DMEM. The RISC-V compiler translates C programs into machine code, while also generating assembly output to assist with debugging and instruction-level verification.
-      Once the C programs are compiled, the resulting machine code is loaded into the chip through the scan chain. During scan mode, the scan chain shifts the binary instructions directly into the IMEM and DMEM. After switching to run mode, the CPU begins fetching instructions from IMEM and executing them, allowing us to verify full-system behavior.
+      Once the C programs are compiled, the resulting machine code is loaded into the chip through the scan chain. During scan mode, the scan chain shifts the instructions directly into the IMEM and DMEM. After switching to run mode, the CPU begins fetching instructions from IMEM and executing them, allowing us to verify full-system behavior.
      </p>
 
       <img src="../images/nanologic/sw_flow.png" alt="layout diagram"><br>
@@ -931,8 +931,8 @@ The masked address is 0x00000001</p>
 OUTPUT_ARCH(riscv)
 MEMORY
 {
-    imem  : ORIGIN = 0x00000000, LENGTH = 0x4000          /* 16 kB */
-    dmem  : ORIGIN = 0x01000000, LENGTH = 0x4000          /* 16 kB */
+    imem  : ORIGIN = 0x00000000, LENGTH = 0x4000          /* 32 kB */
+    dmem  : ORIGIN = 0x01000000, LENGTH = 0x4000          /* 32 kB */
 }
 
 /* Stack information variables */
@@ -1419,7 +1419,7 @@ static inline void delay(int n) {
   }
   </code></pre></div>
     </details>
-    <p>The other software driver, spi_lcd_driver.h, is responsible for defining functions to control the SPI LCD backpack </p>
+    <p>The other software driver, spi_lcd_driver.h, is responsible for defining functions to control the SPI LCD backup. </p>
     <details class="code-block">
       <summary>spi_lcd_driver.h</summary>
       <div class="code-content"><pre><code>// Code based on spi_lcd.h from https://gitfront.io/r/lafis002/nsQYcfC2svzE/iRisc/
@@ -2350,18 +2350,18 @@ static void print_pi_uart(int digits) {
 
     <h3>Testing Methodology</h3>
     <h4>Post-Silicon Validation</h4>
-    <p>To conduct post-silicon validation on our chip, we started with a structured bring-up sequence to validate that the silicon was healthy. The very first step was to construct a testing setup on a breadboard that would allow us to test the various features of our chip. To make the setup easier, we used a QFP64 socket, which allowed us to connect our chip to the breadboard without soldering. Since the chip has 64 pins, and a single breadboard has 63 rows, each row of the breadboard was connected to pins 1 through 63 on the chip. Pin 64, which is GPIO 7, was left disconnected since there was no room, and it wasn’t crucial for initial testing anyway. From there, the breadboard was set up in such a way as to mimic our testbench used in simulation. Specifically, we were most concerned with replicating the scan-chain process.</p>
+    <p>To conduct post-silicon validation on our chip, we started with a structured bring-up sequence to validate that the silicon was healthy. The very first step was to construct a testing setup on a breadboard that would allow us to test the various features of our chip. To make the setup easier, we used a QFP64 socket, which allowed us to connect our chip to the breadboard without soldering. Since the chip has 64 pins, and a single breadboard has 63 rows, each row of the breadboard was connected to pins 1 through 63 on the chip. Pin 64, which is GPIO 7, was left disconnected since there was no room, and it wasn't crucial for initial testing anyway. From there, the breadboard was set up in such a way as to mimic our testbench used in simulation. Specifically, we were most concerned with replicating the scan-chain process.</p>
     <p>To do this, we first documented the expected values and behavior of each pin based on the simulation testbench. This included identifying which pins needed to be set to what voltage, which served as scan-chain controls, which were dedicated I/O pins, and which supplied power or clocking. Having this reference made it possible to map physical pin behavior to the functional waveforms we expected to observe on the oscilloscope.</p>
-    <p>Our initial plan was to use a 3.3 V Arduino Pro Mini as the external controller for scan-chain operations and general chip bring-up. However, we quickly discovered that the Pro Mini’s microcontroller was not compatible with the routines in our scan-chain driver code. As a result, we switched to a 5 V Arduino Uno, using a voltage divider network to ensure that any 5 V outputs feeding into our chip were stepped down to safe levels. This let us continue development while maintaining signal integrity and protecting the silicon.</p>
+    <p>Our initial plan was to use a 3.3 V Arduino Pro Mini as the external controller for scan-chain operations and general chip bring-up. However, we quickly discovered that the Pro Mini's microcontroller was not compatible with the routines in our scan-chain driver code. As a result, we switched to a 5 V Arduino Uno, using a voltage divider network to ensure that any 5 V outputs feeding into our chip were stepped down to safe levels. This let us continue development while maintaining signal integrity and protecting the silicon.</p>
     <p>Once the control hardware was selected, we programmed the Arduino with a scan-chain interface based on code from a previous project in the course. This gave us an immediate framework for clocking in scan data, latching instructions, and reading chain outputs. With this basic infrastructure ready, we attached an oscilloscope to measure the internal clock generator. Our goal was to verify that the on-chip oscillator was functional and running at the intended frequency. After several measurement attempts, including adjusting trigger levels and confirming that our power rails were stable, we were able to confirm oscillation.</p>
     <p>With the core clock verified, we moved on to testing individual subsystems. UART was the first to come online. After configuring baud rate parameters and validating the UART TX waveforms on the oscilloscope, we successfully received UART messages from the chip. This allowed us to use UART as a lightweight diagnostic channel for subsequent tests.</p>
-    <p>Next, we tested GPIO inputs. By manually toggling input pins and reading the chip’s internal state over UART, we confirmed that the GPIO block was latching external values correctly. This validated both the input pads and the internal routing to the processor core. </p>
+    <p>Next, we tested GPIO inputs. By manually toggling input pins and reading the chip's internal state over UART, we confirmed that the GPIO block was latching external values correctly. This validated both the input pads and the internal routing to the processor core. </p>
     <p>For SPI testing, we created a test program to control the SPI pins and verified via oscilloscope that the chip generated the correct clock and data responses. Although initially noisy, after adjusting grounding on the breadboard and shortening several long wires, the SPI signals became reliable.</p>
-    <p>One of the more complex peripherals to bring up was the LCD SPI backpack interface. With SPI known working, and using the previous project’s LCD SPI backpack driver as a foundation, we adapted the initialization and command routines to work with our chip’s instruction format and GPIO mapping. This took several rounds of debugging, but ultimately the LCD displayed correct characters, confirming functional integration between GPIO, instruction memory, and the CPU datapath.</p>
-    <p>As we became more confident in the system’s stability, we returned to improving our scan-chain infrastructure. The initial version loaded all scan data into a unified chain, but for full testing flexibility, we modified the code to load instruction memory and data memory independently. This allowed us to preload programs while separately initializing memory contents used for testing. It also fixed the remaining bug we had with the LCD, where it would often display garbage data, since the string data was not being properly loaded into data memory.</p>
+    <p>One of the more complex peripherals to bring up was the LCD SPI backpack interface. With SPI known working, and using the previous project's LCD SPI backpack driver as a foundation, we adapted the initialization and command routines to work with our chip's instruction format and GPIO mapping. This took several rounds of debugging, but ultimately the LCD displayed correct characters, confirming functional integration between GPIO, instruction memory, and the CPU datapath.</p>
+    <p>As we became more confident in the system's stability, we returned to improving our scan-chain infrastructure. The initial version loaded all scan data into a unified chain, but for full testing flexibility, we modified the code to load instruction memory and data memory independently. This allowed us to preload programs while separately initializing memory contents used for testing. It also fixed the remaining bug we had with the LCD, where it would often display garbage data, since the string data was not being properly loaded into data memory.</p>
     <p>With the breadboard prototype functioning well, we began transitioning toward a standalone PCB. First, we replaced the variable-voltage bench supply with a dedicated 5 V-to-1 V regulator circuit, ensuring a stable and repeatable power configuration. Then, using lessons learned from the breadboard setup, we created the first revision of the PCB. This initial design focused on routing clarity and ensuring all chip pins were accessible for test points. Once fabricated, we tested this board thoroughly, checking power distribution, confirming all traces, and verifying that the chip behaved identically to the breadboard setup.</p>
     <p>Based on these results, we developed the final revision of the PCB, incorporating layout improvements, fixes to various oversights and mistakes from the first PCB, cleaner routing, and quality-of-life enhancements such as labeled headers and in built GPIO buttons. Testing this final revision confirmed that the board performed reliably and eliminated many of the wiring issues inherent to the breadboard prototype.</p>
-    <p>Finally, with the hardware stable, we created and validated the demo code used to showcase the chip’s functionality. The demo serves both as a validation suite and as a demonstration of the chip’s operational capabilities.</p>
+    <p>Finally, with the hardware stable, we created and validated the demo code used to showcase the chip's functionality. The demo serves both as a validation suite and as a demonstration of the chip's operational capabilities.</p>
   </section>
 
   
@@ -2399,11 +2399,17 @@ static void print_pi_uart(int digits) {
     <img src="../images/nanologic/demo/default.jpg" alt="layout diagram" style="display:block; margin:0 auto; width:50%; height:auto;"><br>
     <p class="caption">Figure ?. Starting Our Demo </p>
 
-    <img src="../images/nanologic/demo/Prime.jpg" alt="layout diagram" style="display:block; margin:0 auto; width:50%; height:auto;"><br>
-    <p class="caption">Figure ?. Print Prime Numbers</p>
+    <img src="../images/nanologic/demo/prime.jpg" alt="layout diagram" style="display:block; margin:0 auto; width:50%; height:auto;"><br>
+    <p class="caption">Figure ?. Print Prime Numbers on LCD Screen</p>
+
+    <img src="../images/nanologic/demo/primes_term.png" alt="layout diagram" style="display:block; margin:0 auto; width:50%; height:auto;"><br>
+    <p class="caption">Figure ?. Print Prime Numbers shown on PC</p>
 
     <img src="../images/nanologic/demo/pai.jpg" alt="layout diagram" style="display:block; margin:0 auto; width:50%; height:auto;"><br>
     <p class="caption">Figure ?. Print Pai </p>
+
+    <img src="../images/nanologic/demo/pi_term.png" alt="layout diagram" style="display:block; margin:0 auto; width:50%; height:auto;"><br>
+    <p class="caption">Figure ?. Print Pai shown on PC</p>
 
     <img src="../images/nanologic/demo/game_menu.jpg" alt="layout diagram" style="display:block; margin:0 auto; width:50%; height:auto;"><br>
     <p class="caption">Figure ?. Print Game Menu </p>
